@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Jarvis — Holographic Companion</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --cyan: #00e5ff;
+      --cyan-soft: rgba(0, 229, 255, 0.35);
+      --text: #c9f7ff;
+      --text-dim: #92d6e8;
+      --bg: #030a14;
+    }
+    html, body { height: 100%; margin: 0; background:#000; color: var(--text); font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif; }
+
+    /* Soft cosmic background */
+    body::before {
+      content: "";
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(1200px 600px at 50% -10%, rgba(0, 229, 255, 0.12), transparent 60%),
+        radial-gradient(800px 400px at 50% 110%, rgba(0, 229, 255, 0.10), transparent 55%),
+        radial-gradient(circle at 50% 50%, #031220 0%, #01070f 60%, #000 100%);
+      filter: blur(0.2px);
+      z-index: -2;
+    }
+
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      place-items: center;
+      padding: 40px 16px 24px;
+    }
+
+    .stage {
+      position: relative;
+      display: grid;
+      place-items: center;
+      gap: 16px;
+    }
+
+    /* Avatar group */
+    .avatar-wrap {
+      position: relative;
+      width: min(78vw, 420px);
+      aspect-ratio: 1/1; /* maintains a square area */
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+    }
+
+    /* Base glow & projection cone */
+    .base-glow {
+      position: absolute;
+      bottom: -14%;
+      width: 75%;
+      height: 40%;
+      transform: perspective(600px) rotateX(68deg);
+      background: radial-gradient(ellipse at center, rgba(0, 229, 255, 0.30), transparent 70%);
+      filter: blur(26px);
+      opacity: 0.55;
+      animation: basePulse 4s ease-in-out infinite alternate;
+    }
+    @keyframes basePulse {
+      from { opacity: 0.38; }
+      to   { opacity: 0.75; }
+    }
+
+    .cone {
+      position: absolute;
+      bottom: -8%;
+      width: 52%;
+      height: 58%;
+      transform: perspective(600px) rotateX(68deg);
+      background: radial-gradient(ellipse at top, rgba(0, 229, 255, 0.22), transparent 70%);
+      filter: blur(20px);
+      animation: conePulse 3s ease-in-out infinite alternate;
+      opacity: .8;
+    }
+    @keyframes conePulse {
+      from { opacity: 0.28; transform: perspective(600px) rotateX(68deg) scaleY(.96); }
+      to   { opacity: 0.52; transform: perspective(600px) rotateX(68deg) scaleY(1.04); }
+    }
+
+    /* Hologram image with SOFT EDGE MASK — avoids hard circle crop */
+    .avatar {
+      width: 92%;
+      height: auto;
+      object-fit: contain; /* keep entire head visible */
+      filter: drop-shadow(0 0 28px rgba(0,255,255,0.45)) brightness(1.06);
+      animation: idleGlow 4s ease-in-out infinite alternate;
+      /* soft feathered oval mask toward edges so it "floats" */
+      -webkit-mask-image: radial-gradient(ellipse at 50% 48%, rgba(0,0,0,1) 62%, rgba(0,0,0,0) 85%);
+      mask-image: radial-gradient(ellipse at 50% 48%, rgba(0,0,0,1) 62%, rgba(0,0,0,0) 85%);
+    }
+    @keyframes idleGlow {
+      from { filter: drop-shadow(0 0 16px rgba(0,255,255,0.28)) brightness(1.02); opacity: .92; }
+      to   { filter: drop-shadow(0 0 44px rgba(0,255,255,0.55)) brightness(1.12); opacity: 1; }
+    }
+
+    /* Scanline shimmer (very subtle) */
+    .scanlines::before {
+      content:"";
+      position:absolute; inset:0;
+      border-radius: 28px;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 229, 255, 0.06) 0px,
+        rgba(0, 229, 255, 0.06) 2px,
+        transparent 2px,
+        transparent 4px
+      );
+      mix-blend-mode: screen;
+      pointer-events:none;
+      animation: flicker 1.8s linear infinite;
+      -webkit-mask-image: radial-gradient(ellipse at 50% 48%, rgba(0,0,0,1) 62%, rgba(0,0,0,0) 85%);
+      mask-image: radial-gradient(ellipse at 50% 48%, rgba(0,0,0,1) 62%, rgba(0,0,0,0) 85%);
+    }
+    @keyframes flicker { 0%,100% {opacity:.06;} 50% {opacity:.18;} }
+
+    /* Speaking pulse (extra glow while audio plays) */
+    .speaking { animation: speakingPulse .7s ease-in-out infinite alternate !important; }
+    @keyframes speakingPulse {
+      from { filter: drop-shadow(0 0 35px rgba(0,255,255,.85)) brightness(1.25); }
+      to   { filter: drop-shadow(0 0 72px rgba(0,255,255,1)) brightness(1.36); }
+    }
+
+    /* Caption bubble (toggleable) */
+    .caption {
+      margin-top: 12px;
+      min-height: 0;
+      max-width: min(84vw, 620px);
+      color: var(--text-dim);
+      text-shadow: 0 0 8px rgba(0,255,255,.35);
+      background: rgba(0, 20, 40, 0.45);
+      border: 1px solid rgba(0, 229, 255, 0.16);
+      border-radius: 12px;
+      padding: 10px 12px;
+      backdrop-filter: blur(6px);
+      display:none; /* hidden by default; switch toggles */
+    }
+
+    /* Input row — 100px below the head */
+    .controls {
+      margin-top: 100px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: min(90vw, 640px);
+    }
+    .field {
+      position: relative;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: rgba(0, 20, 40, 0.45);
+      border: 1px solid rgba(0, 229, 255, 0.16);
+      border-radius: 14px;
+      padding: 6px 10px;
+      backdrop-filter: blur(6px);
+    }
+    input[type="text"] {
+      appearance: none;
+      border: none; outline: none;
+      flex: 1;
+      min-width: 0;
+      font-size: 16px;
+      padding: 10px 6px;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .btn {
+      width: 42px; height: 42px;
+      display: grid; place-items: center;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      cursor: pointer;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease, opacity .15s ease, box-shadow .15s ease;
+      user-select: none;
+    }
+    .btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.22); box-shadow: 0 0 12px rgba(0,229,255,.18); }
+    .btn:active { transform: translateY(0); opacity: .85; }
+
+    /* White mono icons */
+    .icon { width: 20px; height: 20px; stroke: #fff; stroke-width: 1.8; fill: none; }
+
+    /* Right controls (captions toggle + hidden file input) */
+    .side {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim);
+      background: rgba(0, 20, 40, 0.45);
+      border: 1px solid rgba(0, 229, 255, 0.16);
+      border-radius: 14px;
+      padding: 8px 10px;
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle input { display: none; }
+    .switch {
+      width: 34px; height: 20px; border-radius: 999px;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      position: relative; transition: all .2s ease;
+    }
+    .knob {
+      position: absolute; top: 50%; left: 2px; transform: translateY(-50%);
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; opacity: .9; transition: left .2s ease, background .2s ease;
+    }
+    .toggle input:checked + .switch .knob { left: 18px; background: var(--cyan); }
+
+    .toast {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      background: rgba(0, 20, 40, 0.75);
+      border: 1px solid rgba(0, 229, 255, 0.22);
+      color: var(--text);
+      padding: 10px 14px; border-radius: 10px;
+      font-size: 14px; display: none;
+      backdrop-filter: blur(6px);
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="stage">
+      <div class="avatar-wrap scanlines">
+        <img id="avatar" class="avatar" src="avatar.png" alt="Jarvis holographic head" />
+        <div class="cone"></div>
+        <div class="base-glow"></div>
+      </div>
+
+      <div id="caption" class="caption"></div>
+
+      <div class="controls">
+        <div class="field">
+          <input id="prompt" type="text" placeholder="Talk to Jarvis…" autocomplete="off" />
+          <button id="send" class="btn" title="Send">
+            <!-- paper plane -->
+            <svg class="icon" viewBox="0 0 24 24"><path d="M3 12l18-9-7 18-2-7-9-2z"/></svg>
+          </button>
+          <button id="uploadBtn" class="btn" title="Upload file">
+            <!-- upload -->
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12m0-12l-4 4m4-4l4 4M4 17h16v4H4z"/></svg>
+          </button>
+          <input id="file" type="file" style="display:none" accept=".pdf,.txt,.md,.json,.xml,.html,.xhtml" />
+        </div>
+
+        <div class="side">
+          <label class="toggle" title="Show/Hide captions">
+            <input id="toggleCaptions" type="checkbox" />
+            <div class="switch"><div class="knob"></div></div>
+            <span>Captions</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const avatar = document.getElementById("avatar");
+    const caption = document.getElementById("caption");
+    const promptEl = document.getElementById("prompt");
+    const sendBtn = document.getElementById("send");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const fileInput = document.getElementById("file");
+    const toggleCaptions = document.getElementById("toggleCaptions");
+    const toast = document.getElementById("toast");
+
+    // Captions default OFF (hidden)
+    caption.style.display = "none";
+    toggleCaptions.checked = false;
+    toggleCaptions.addEventListener("change", () => {
+      caption.style.display = toggleCaptions.checked ? "block" : "none";
+    });
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.style.display = "block";
+      setTimeout(() => (toast.style.display = "none"), 1800);
+    }
+
+    async function speak(text) {
+      try {
+        avatar.classList.add("speaking");
+        const r = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+        const data = await r.json();
+        if (!r.ok || !data?.audioContent) {
+          console.warn("TTS failed", data);
+          return;
+        }
+        const audio = new Audio("data:audio/mp3;base64," + data.audioContent);
+        audio.onended = () => avatar.classList.remove("speaking");
+        audio.play().catch(() => avatar.classList.remove("speaking"));
+      } catch (e) {
+        console.warn("TTS error", e);
+        avatar.classList.remove("speaking");
+      }
+    }
+
+    async function sendMessage() {
+      const text = promptEl.value.trim();
+      if (!text) return;
+
+      // Optimistic caption UX
+      if (toggleCaptions.checked) {
+        caption.textContent = `You: ${text}`;
+      }
+      promptEl.value = "";
+
+      // Chat
+      try {
+        const resp = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: text })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data?.error || "Chat failed");
+
+        const reply = data.reply || "…";
+        if (toggleCaptions.checked) {
+          caption.textContent = `Jarvis: ${reply}`;
+        }
+        // Speak
+        await speak(reply);
+      } catch (e) {
+        if (toggleCaptions.checked) caption.textContent = "Jarvis: (connection issue)";
+        console.warn(e);
+      }
+    }
+
+    // File upload: single icon button triggers hidden input
+    uploadBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      if (!fileInput.files || !fileInput.files[0]) return;
+      const f = fileInput.files[0];
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const r = await fetch("/api/file", { method: "POST", body: fd });
+        const data = await r.json();
+        if (!r.ok || !data?.ok) {
+          showToast("Upload failed");
+          return;
+        }
+        showToast(`Loaded: ${data.filename}`);
+        if (toggleCaptions.checked) {
+          caption.textContent = `Jarvis: I’ve loaded “${data.filename}”. Ask me about it.`;
+        }
+      } catch (e) {
+        showToast("Upload error");
+      } finally {
+        // reset input to allow re-upload same file
+        fileInput.value = "";
+      }
+    });
+
+    // Send events
+    sendBtn.addEventListener("click", sendMessage);
+    promptEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>

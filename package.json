@@ -1,0 +1,19 @@
+{
+  "name": "jarvis-holo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@d-id/client-sdk": "^1.1.14",
+    "@heygen/streaming-avatar": "^2.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "livekit-client": "^2.15.12",
+    "multer": "^2.0.2",
+    "node-fetch": "^3.3.2",
+    "pdfjs-dist": "^5.4.296"
+  }
+}
